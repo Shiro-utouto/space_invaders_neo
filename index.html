@@ -1,0 +1,116 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Space Invaders Neo – Mobile Fix</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;-webkit-user-select:none;user-select:none}
+canvas{display:block;margin:0 auto;background:#000}
+#msg{position:fixed;top:0;left:0;width:100%;height:100%;color:#fff;font-family:sans-serif;background:rgba(0,0,0,.85);
+display:none;align-items:center;justify-content:center;flex-direction:column}
+button{padding:10px 24px;font-size:18px;border:none;border-radius:6px;background:#3498db;color:#fff}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="msg"><h1 id="status"></h1><button id="restart">PLAY AGAIN</button></div>
+<script>
+(()=>{const cvs=document.getElementById('game'),ctx=cvs.getContext('2d');
+let W=window.innerWidth,H=window.innerHeight;cvs.width=W;cvs.height=H;
+// sprites optional
+const sprite=new Image();sprite.src='sprites.png';let spriteReady=false;sprite.onload=()=>spriteReady=true;
+// player
+const player={w:Math.max(30,Math.min(50,W*0.08)),h:20,x:W/2,y:H-70,spd:7};
+const bullets=[],enemyBullets=[],explosions=[],enemies=[];
+const rows=4,cols=8;
+let gap=Math.min(60,Math.floor(W/(cols+1))); // dynamic spacing
+function initEnemies(){
+ enemies.length=0;
+ gap=Math.min(60,Math.floor(W/(cols+1)));
+ const startX=Math.max(20,(W-cols*gap)/2);
+ for(let r=0;r<rows;r++){
+   for(let c=0;c<cols;c++){
+     enemies.push({x:startX+c*gap,y:80+r*45,w:32,h:24,dir:1,row:r});
+   }
+ }}
+initEnemies();
+const stars=Array.from({length:120},()=>({x:Math.random()*W,y:Math.random()*H}));
+// drawing
+function drawStarfield(){ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';
+ stars.forEach(s=>{ctx.fillRect(s.x,s.y,1,1); if((s.y+=0.4)>H){s.y=0;s.x=Math.random()*W;}});}
+function draw(){
+ drawStarfield();
+ // player
+ if(spriteReady)ctx.drawImage(sprite,0,0,32,16,player.x,player.y,player.w,player.h);
+ else {ctx.fillStyle='#0f0';ctx.fillRect(player.x,player.y,player.w,player.h);}
+ // bullets
+ ctx.fillStyle='#ff0';bullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
+ ctx.fillStyle='#ff5555';enemyBullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
+ // enemies
+ enemies.forEach(e=>{
+   if(spriteReady){
+     const sx=64+32*(e.row%3);const sy=32;
+     ctx.drawImage(sprite,sx,sy,32,24,e.x,e.y,e.w,e.h);
+   }else{ctx.fillStyle='#0af';ctx.fillRect(e.x,e.y,e.w,e.h);}
+ });
+ // explosions
+ explosions.forEach(ex=>{ctx.globalAlpha=ex.a;ctx.fillStyle='#fa0';ctx.beginPath();
+   ctx.arc(ex.x,ex.y,ex.r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;});
+}
+function update(){
+ bullets.forEach((b,i)=>{b.y-=10;if(b.y<0)bullets.splice(i,1);});
+ // enemies
+ let shiftDown=false;
+ enemies.forEach(e=>{e.x+=e.dir*2;if(e.x<20||e.x+e.w>W-20)shiftDown=true;});
+ if(shiftDown){
+   enemies.forEach(e=>{e.dir*=-1;e.y+=25;});
+ }
+ // collisions
+ bullets.forEach((b,bi)=>{
+   enemies.forEach((e,ei)=>{
+     if(b.x<e.x+e.w && b.x+4>e.x && b.y<e.y+e.h && b.y+10>e.y){
+       explosions.push({x:e.x+e.w/2,y:e.y+e.h/2,r:2,a:1});
+       enemies.splice(ei,1);bullets.splice(bi,1);
+     }
+   });
+ });
+ // enemy shoot
+ if(Math.random()<0.02 && enemies.length){
+   const e=enemies[Math.floor(Math.random()*enemies.length)];
+   enemyBullets.push({x:e.x+e.w/2,y:e.y+e.h});
+ }
+ enemyBullets.forEach((b,bi)=>{
+   b.y+=6;if(b.y>H)enemyBullets.splice(bi,1);
+   if(b.x<player.x+player.w && b.x+4>player.x && b.y+10>player.y && b.y<player.y+player.h){
+     end(false);
+   }
+ });
+ explosions.forEach((ex,xi)=>{ex.r+=1.5;ex.a-=0.03;if(ex.a<=0)explosions.splice(xi,1);});
+ if(enemies.length===0)end(true);
+}
+function end(win){status.textContent=win?'YOU WIN!':'GAME OVER';msg.style.display='flex';running=false;}
+let running=true;
+function loop(){if(running){update();draw();requestAnimationFrame(loop);}}loop();
+// controls
+let left=false,right=false;
+window.addEventListener('keydown',e=>{
+ if(e.key==='ArrowLeft')left=true;
+ if(e.key==='ArrowRight')right=true;
+ if(e.key===' '&&running)bullets.push({x:player.x+player.w/2-2,y:player.y});
+});
+window.addEventListener('keyup',e=>{
+ if(e.key==='ArrowLeft')left=false;
+ if(e.key==='ArrowRight')right=false;
+});
+function movePlayer(){if(left)player.x-=player.spd;if(right)player.x+=player.spd;
+ if(player.x<0)player.x=0;if(player.x+player.w>W)player.x=W-player.w;}
+setInterval(movePlayer,16);
+// restart
+restart.onclick=()=>{player.x=W/2;bullets.length=0;enemyBullets.length=0;explosions.length=0;initEnemies();running=true;msg.style.display='none';};
+window.addEventListener('resize',()=>location.reload());
+})();
+</script>
+</body>
+</html>
