@@ -3,148 +3,138 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Space Invaders – Power Edition v1.4</title>
+<title>Space Invaders – Endless Edition v2.0</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;-webkit-user-select:none;user-select:none}
 canvas{display:block;margin:0 auto;background:#000}
-#msg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
-font-family:sans-serif;color:#fff;background:rgba(0,0,0,.85)}
+#msg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;font-family:sans-serif;color:#fff;background:rgba(0,0,0,.85)}
 button{padding:10px 24px;font-size:18px;border:none;border-radius:6px;background:#3498db;color:#fff}
 </style>
 </head>
 <body>
 <canvas id="g"></canvas>
-<div id="msg">
-  <h1 id="st"></h1>
-  <p id="stat"></p>
-  <button id="rs">PLAY AGAIN</button>
-</div>
+<div id="msg"><h1 id="st"></h1><p id="summary"></p><button id="rs">PLAY AGAIN</button></div>
 <script>
 (()=>{const cvs=document.getElementById('g'),ctx=cvs.getContext('2d');
 const dpr=window.devicePixelRatio||1;let W=innerWidth,H=innerHeight;
 cvs.width=W*dpr;cvs.height=H*dpr;cvs.style.width=W+'px';cvs.style.height=H+'px';ctx.scale(dpr,dpr);
 
-// ---------- State ----------
-let level=1,score=0,high=Number(localStorage.getItem('hi'))||0;
-let shootCooldown=0,powerTimer=0,rapid=false,spread=false;
-const player={w:40,h:20,x:(W-40)/2,y:H-70,spd:8,baseColor:'#0f0',color:'#0f0'};
-const bullets=[],enemyBullets=[],explosions=[],enemies=[],ufos=[],powerUps=[];
+// ------------------ State ------------------
+let level=1,score=0;
+let highScore=+localStorage.getItem('si_high')||0;
+const player={w:40,h:20,x:(W-40)/2,y:H-70,spd:8,color:'#0f0'};
+const bullets=[],enemyBullets=[],explosions=[],enemies=[],ufos=[];
 const rows=4,cols=8;
+let running=true;
 
-// ---------- Helpers ----------
-const rnd=(n)=>Math.random()*n|0;
+// ------------------ Utility ------------------
+const stars=Array.from({length:120},()=>({x:Math.random()*W,y:Math.random()*H}));
 function rectPoint(r,x,y){return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h;}
-function rectHit(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
 function explode(x,y){explosions.push({x,y,r:2,a:1});}
-function starArray(){return Array.from({length:120},()=>({x:Math.random()*W,y:Math.random()*H}));}
-const stars=starArray();
 
-// ---------- Wave ----------
+// ------------------ Wave ------------------
 function spawnWave(){
  enemies.length=0;
- const gap=Math.min(60,W/(cols+1)),startX=(W-cols*gap)/2,pal=['#0af','#f0a','#0ff','#fa0'];
- for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)
-   enemies.push({x:startX+c*gap,y:60+r*45,w:30,h:22,dir:1,color:pal[r%4],
-                 speed:1+0.2*(level-1)});
- if(level%2===0) ufos.push({x:-60,y:30,w:40,h:18,spd:3+level,color:'#ff0'});
+ const gap=Math.min(60,W/(cols+1));
+ const startX=(W-cols*gap)/2;
+ const palette=['#0af','#f0a','#0ff','#fa0'];
+ for(let r=0;r<rows;r++){
+   for(let c=0;c<cols;c++){
+     enemies.push({x:startX+c*gap,y:60+r*45,w:30,h:22,dir:1,
+                   color:palette[r%4],speed:1+0.2*(level-1)});
+   }
+ }
+ if(level%3===0) ufos.push({x:-50,y:30,w:40,h:18,spd:3+level*0.4,color:'#ff0'});
 }
 
-// ---------- PowerUps ----------
-function spawnPower(x,y){powerUps.push({x,y,type:Math.random()<0.5?'RAPID':'SPREAD'});}
-function applyPower(t){if(t==='RAPID'){rapid=true;player.color='#ff0';powerTimer=900;}
-                      else{spread=true;player.color='#0ff';powerTimer=900;}}
-
-// ---------- Draw ----------
-function drawBG(){
- ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';
- stars.forEach(s=>{ctx.fillRect(s.x,s.y,1,1);s.y+=0.3;if(s.y>H){s.y=0;s.x=Math.random()*W;}});
+// ------------------ Draw ------------------
+function drawStars(){
+ ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#fff';
+ stars.forEach(s=>{ctx.fillRect(s.x,s.y,1,1); s.y+=0.3; if(s.y>H){s.y=0;s.x=Math.random()*W;}});
 }
 function draw(){
- drawBG();
+ drawStars();
  ufos.forEach(u=>{ctx.fillStyle=u.color;ctx.fillRect(u.x,u.y,u.w,u.h);});
- powerUps.forEach(p=>{ctx.fillStyle=p.type==='RAPID'?'#ff0':'#0ff';ctx.beginPath();ctx.arc(p.x,p.y,6,0,6.283);ctx.fill();});
  ctx.fillStyle=player.color;ctx.fillRect(player.x,player.y,player.w,player.h);
  ctx.fillStyle='#ff0';bullets.forEach(b=>ctx.fillRect(b.x,b.y,3,10));
  ctx.fillStyle='#f55';enemyBullets.forEach(b=>ctx.fillRect(b.x,b.y,3,10));
  enemies.forEach(e=>{ctx.fillStyle=e.color;ctx.fillRect(e.x,e.y,e.w,e.h);});
- explosions.forEach(ex=>{ctx.globalAlpha=ex.a;ctx.fillStyle='#fa0';ctx.beginPath();ctx.arc(ex.x,ex.y,ex.r,0,6.283);ctx.fill();ctx.globalAlpha=1;});
- ctx.fillStyle='#fff';ctx.fillText(`LV ${level}  SCORE ${score}  HI ${high}`,10,18);
+ explosions.forEach(ex=>{ctx.globalAlpha=ex.a;ctx.fillStyle='#fa0';
+   ctx.beginPath();ctx.arc(ex.x,ex.y,ex.r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;});
+ ctx.fillStyle='#fff';ctx.fillText(`LEVEL ${level}   SCORE ${score}   HI ${highScore}`,10,18);
 }
 
-// ---------- Update ----------
+// ------------------ Update ------------------
+let playerFireTimer=0;
 function update(){
- if(shootCooldown)shootCooldown--;
- if(powerTimer&&!--powerTimer){rapid=spread=false;player.color=player.baseColor;}
- bullets.forEach((b,i)=>{b.y-=10;b.x+=b.dx||0;if(b.y<-10)bullets.splice(i,1);});
- let edge=false;enemies.forEach(e=>{e.x+=e.dir*e.speed;if(e.x<10||e.x+e.w>W-10)edge=true;});
- if(edge)enemies.forEach(e=>{e.dir*=-1;e.y+=25;});
- enemies.forEach(e=>{if(rectHit(e,player))gg(false);});
+ // bullets
+ bullets.forEach((b,i)=>{b.y-=10;b.x+=b.dx||0;if(b.y<-10||b.x<-5||b.x>W+5)bullets.splice(i,1);});
+ // auto fire
+ if(--playerFireTimer<=0){fireSpread();playerFireTimer=Math.max(15,60-5*level);}
+ // enemies move
+ let shift=false;
+ enemies.forEach(e=>{e.x+=e.dir*e.speed;if(e.x<10||e.x+e.w>W-10)shift=true;});
+ if(shift) enemies.forEach(e=>{e.dir*=-1;e.y+=25;});
+ // collisions bullets vs enemies
  bullets.forEach((b,bi)=>{
-   for(let ei=enemies.length-1;ei>=0;ei--){let e=enemies[ei];
-     if(rectPoint(e,b.x,b.y)){explode(e.x+15,e.y+11);enemies.splice(ei,1);bullets.splice(bi,1);score+=100;if(Math.random()<0.15)spawnPower(e.x+15,e.y);break;}
+   for(let i=enemies.length-1;i>=0;i--){const e=enemies[i];
+     if(rectPoint(e,b.x,b.y)){explode(e.x+e.w/2,e.y+e.h/2);enemies.splice(i,1);bullets.splice(bi,1);score+=100;break;}
    }
-   for(let ui=ufos.length-1;ui>=0;ui--){let u=ufos[ui];
-     if(rectPoint(u,b.x,b.y)){explode(u.x+20,u.y+9);ufos.splice(ui,1);bullets.splice(bi,1);score+=200;break;}
+   for(let i=ufos.length-1;i>=0;i--){const u=ufos[i];
+     if(rectPoint(u,b.x,b.y)){explode(u.x+u.w/2,u.y+u.h/2);ufos.splice(i,1);bullets.splice(bi,1);score+=300;break;}
    }
  });
- ufos.forEach((u,ui)=>{u.x+=u.spd;if(u.x>W+50)ufos.splice(ui,1);});
- powerUps.forEach((p,pi)=>{p.y+=2;if(p.y>H)powerUps.splice(pi,1);
-   else if(rectPoint(player,p.x,p.y)){applyPower(p.type);powerUps.splice(pi,1);} });
- const fireRate=0.02+level*0.002; // increase with level
- const bulletSpeed=6+level*0.3;
- if(Math.random()<fireRate&&enemies.length){const e=enemies[rnd(enemies.length)];
-   enemyBullets.push({x:e.x+15,y:e.y+22,spd:bulletSpeed});}
+ // ufos move
+ ufos.forEach((u,i)=>{u.x+=u.spd;if(u.x>W+50)ufos.splice(i,1);});
+ // enemy shoot
+ const shootProb=Math.min(0.02+level*0.002,0.06);
+ if(Math.random()<shootProb && enemies.length){
+   const e=enemies[Math.random()*enemies.length|0];
+   enemyBullets.push({x:e.x+e.w/2,y:e.y+e.h,spd:4+level*0.3});
+ }
  enemyBullets.forEach((b,bi)=>{b.y+=b.spd;if(b.y>H)enemyBullets.splice(bi,1);
-   else if(rectPoint(player,b.x,b.y))gg(false);});
- explosions.forEach((ex,xi)=>{ex.r+=1.4;ex.a-=0.03;if(ex.a<=0)explosions.splice(xi,1);});
+   else if(rectPoint(player,b.x,b.y)) endGame();});
+ // explosions decay
+ explosions.forEach((ex,xi)=>{ex.r+=1.3;ex.a-=0.03;if(ex.a<=0)explosions.splice(xi,1);});
+ // next level
  if(!enemies.length){level++;spawnWave();}
 }
 
-// ---------- Input ----------
-function shoot(){
- if(shootCooldown) return;
- if(spread){bullets.push({x:player.x+20,y:player.y,dx:0});
-            bullets.push({x:player.x+20,y:player.y,dx:-2});
-            bullets.push({x:player.x+20,y:player.y,dx:2});}
- else bullets.push({x:player.x+20,y:player.y,dx:0});
- shootCooldown=rapid?5:15;
+function fireSpread(){
+ bullets.push({x:player.x+player.w/2-1.5,y:player.y,dx:0});
+ bullets.push({x:player.x+player.w/2-1.5,y:player.y,dx:-2});
+ bullets.push({x:player.x+player.w/2-1.5,y:player.y,dx:2});
 }
+
 let left=false,right=false;
-addEventListener('keydown',e=>{
- if(e.key==='ArrowLeft')left=true;
- if(e.key==='ArrowRight')right=true;
- if(e.key===' '&&run)shoot();
-});
-addEventListener('keyup',e=>{
- if(e.key==='ArrowLeft')left=false;
- if(e.key==='ArrowRight')right=false;
-});
-addEventListener('pointerdown',e=>{if(!run)return;move(e);shoot();});
-addEventListener('pointermove',e=>move(e));
-function move(e){if(!run)return;const r=cvs.getBoundingClientRect();player.x=e.clientX-r.left-player.w/2;}
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft')left=true;if(e.key==='ArrowRight')right=true;});
+addEventListener('keyup',e=>{if(e.key==='ArrowLeft')left=false;if(e.key==='ArrowRight')right=false;});
+addEventListener('pointermove',e=>{const r=cvs.getBoundingClientRect();player.x=e.clientX-r.left-player.w/2;});
 
-// movement timer
-setInterval(()=>{if(!run)return;if(left)player.x-=player.spd;if(right)player.x+=player.spd;
- if(player.x<0)player.x=0;if(player.x+player.w>W)player.x=W-player.w;},16);
+// movement
+setInterval(()=>{if(!running)return;
+ if(left)player.x-=player.spd;
+ if(right)player.x+=player.spd;
+ if(player.x<0)player.x=0;if(player.x+player.w>W)player.x=W-player.w;
+},16);
 
-// ---------- Game Loop ----------
-let run=true;
-function loop(){if(run){update();draw();requestAnimationFrame(loop);}}
-loop();
+// ------------------ Game Loop ------------------
+function loop(){if(!running)return;update();draw();requestAnimationFrame(loop);}
+spawnWave();loop();
 
-// ---------- GameOver ----------
-function gg(win){
- run=false;
- st.textContent=win?'YOU WIN!':'GAME OVER';
- stat.textContent=`LEVEL ${level}   SCORE ${score}`;
- if(score>high){high=score;localStorage.setItem('hi',high);stat.textContent+=`  NEW HI!`; }
+// ------------------ End / Restart ------------------
+function endGame(){
+ running=false;
+ summary.textContent=`SCORE ${score}   LEVEL ${level}`;
+ if(score>highScore){highScore=score;localStorage.setItem('si_high',highScore);summary.textContent+=`  NEW HI!`;}
  msg.style.display='flex';
+ st.textContent='GAME OVER';
 }
-rs.onclick=()=>{level=1;score=0;shootCooldown=0;rapid=spread=false;player.color=player.baseColor;
- bullets.length=enemyBullets.length=explosions.length=enemies.length=ufos.length=powerUps.length=0;
- player.x=(W-player.w)/2;
- spawnWave();run=true;msg.style.display='none';loop();};
+rs.onclick=()=>{level=1;score=0;running=true;
+ bullets.length=enemyBullets.length=explosions.length=enemies.length=ufos.length=0;
+ player.x=(W-player.w)/2;playerFireTimer=0;spawnWave();msg.style.display='none';loop();};
 addEventListener('resize',()=>location.reload());
 })();
 </script>
